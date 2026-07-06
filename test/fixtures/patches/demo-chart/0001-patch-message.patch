@@ -1,0 +1,8 @@
+--- a/demo-chart/templates/configmap.yaml
++++ b/demo-chart/templates/configmap.yaml
+@@ -3,4 +3,4 @@
+ metadata:
+   name: {{ .Release.Name }}-demo
+ data:
+-  message: upstream
++  message: patched

@@ -1,0 +1,55 @@
+name: update-bot
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.UPDATE_BOT_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.UPDATE_BOT_TOKEN || github.token }}
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: open one PR per outdated chart
+        run: |
+          git config user.name "tenx-update-bot"
+          git config user.email "software@tenx.inc"
+
+          mapfile -t updates < <(scripts/check-updates.sh)
+          failed=0
+          for line in "${updates[@]}"; do
+            read -r name current latest <<< "$line"
+            branch="update/${name}-${latest}"
+            if git ls-remote --exit-code origin "$branch" > /dev/null 2>&1; then
+              echo "skip: $branch already exists"
+              continue
+            fi
+            if ! (
+              set -euo pipefail
+              git checkout -B "$branch" origin/main
+              yq -i "(.charts[] | select(.name == \"$name\")).version = \"$latest\"" .charts.yml
+              chart-vendor
+              git add -A
+              git commit -m "chore($name): update $current -> $latest"
+              git push origin "$branch"
+              gh pr create --base main --head "$branch" \
+                --title "chore($name): update to $latest" \
+                --body "Automated upstream update: \`$name\` $current -> $latest.
+
+          Review the vendored source diff here and the rendered-manifest diff comment from pr-checks before merging. If patches failed to re-apply, this PR was not opened and the workflow run shows the patch error instead."
+            ); then
+              echo "::error::update failed for $name (patch conflict or fetch error)"
+              failed=1
+            fi
+          done
+          exit "$failed"

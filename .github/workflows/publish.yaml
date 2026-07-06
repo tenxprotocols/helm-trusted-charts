@@ -1,0 +1,41 @@
+name: publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "charts/**"
+      - "publish.yml"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: log in to ghcr
+        run: |
+          helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin \
+            <<< "${{ secrets.GITHUB_TOKEN }}"
+          oras login ghcr.io -u "${{ github.actor }}" --password-stdin \
+            <<< "${{ secrets.GITHUB_TOKEN }}"
+      - name: publish changed charts
+        run: |
+          base="${{ github.event.before }}"
+          if [[ -z "$base" ]] || ! git cat-file -e "$base" 2>/dev/null; then
+            # Unknown base (first push / force push): consider every chart.
+            # publish.sh skips versions that already exist, so this is safe.
+            charts=$(ls charts | grep -v '^patches$')
+          else
+            charts=$(scripts/changed-charts.sh "$base")
+          fi
+          for chart in $charts; do
+            scripts/publish.sh "$chart"
+          done

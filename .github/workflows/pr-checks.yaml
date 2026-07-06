@@ -1,0 +1,83 @@
+name: pr-checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  vendor-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: vexxhost/chart-vendor@65da572a434e72019982a84c2e5ecab011e55111
+
+  lint-and-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: helm lint and template every chart
+        run: |
+          for dir in charts/*/; do
+            [[ "$dir" == "charts/patches/" ]] && continue
+            helm lint "$dir"
+            helm template smoke "$dir" > /dev/null
+          done
+
+  script-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: run script test suite
+        run: |
+          test/test-patch-path.sh
+          test/test-check-updates.sh
+          test/test-publish-version.sh
+          test/test-render-diff.sh
+
+  publish-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: verify changed charts publish to unused versions
+        run: |
+          for chart in $(scripts/changed-charts.sh "origin/${{ github.base_ref }}"); do
+            scripts/publish.sh "$chart" --check-only
+          done
+
+  render-diff:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: comment rendered-manifest diff
+        run: |
+          charts=$(scripts/changed-charts.sh "origin/${{ github.base_ref }}")
+          [[ -z "$charts" ]] && exit 0
+          {
+            echo '<!-- render-diff -->'
+            echo '## Rendered manifest diff'
+            for chart in $charts; do
+              echo "<details><summary>${chart}</summary>"
+              echo
+              echo '```diff'
+              scripts/render-diff.sh "$chart" "origin/${{ github.base_ref }}"
+              echo '```'
+              echo '</details>'
+            done
+          } > /tmp/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --edit-last --create-if-none --body-file /tmp/comment.md
