@@ -1,0 +1,7 @@
+[tools]
+go = "latest"
+helm = "latest"
+yq = "latest"
+oras = "latest"
+cosign = "latest"
+"go:github.com/vexxhost/chart-vendor" = "cdf455ed961550af9b89cd4fc1e333da603fc54f"

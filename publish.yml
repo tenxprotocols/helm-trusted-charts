@@ -1,0 +1,5 @@
+# Per-chart publish configuration.
+# Charts with files under charts/patches/<chart>/ MUST have an entry here with
+# revision >= 1 (published as <upstream-version>+tenx.<revision>).
+# Unpatched charts need no entry and publish under the upstream version verbatim.
+charts: {}
