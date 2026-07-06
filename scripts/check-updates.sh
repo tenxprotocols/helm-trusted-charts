@@ -13,13 +13,13 @@ for i in $(seq 0 $((count - 1))); do
   url=$(yq ".charts[$i].repository.url" "$config")
 
   if [[ "$url" == oci://* ]]; then
-    latest=$(oras repo tags "${url#oci://}/$name" \
-      | grep -v -- - | sort -V | tail -1)
+    tags=$(oras repo tags "${url#oci://}/$name") \
+      || { echo "error: tag lookup failed for $name at $url" >&2; exit 1; }
   else
-    latest=$(curl -fsSL "$url/index.yaml" \
-      | yq ".entries.\"$name\"[].version" \
-      | grep -v -- - | sort -V | tail -1)
+    tags=$(curl -fsSL "$url/index.yaml" | yq ".entries.\"$name\"[].version") \
+      || { echo "error: index lookup failed for $name at $url" >&2; exit 1; }
   fi
+  latest=$(printf '%s\n' "$tags" | { grep -v -- - || true; } | sort -V | tail -1)
 
   if [[ -z "$latest" ]]; then
     echo "error: no stable versions found for $name at $url" >&2
