@@ -25,13 +25,18 @@ jobs:
           git config user.name "tenx-update-bot"
           git config user.email "software@tenx.inc"
 
-          mapfile -t updates < <(scripts/check-updates.sh)
+          updates_raw=$(scripts/check-updates.sh)
+          if [[ -z "$updates_raw" ]]; then
+            echo "all charts up to date"
+            exit 0
+          fi
+          mapfile -t updates <<< "$updates_raw"
           failed=0
           for line in "${updates[@]}"; do
             read -r name current latest <<< "$line"
             branch="update/${name}-${latest}"
-            if git ls-remote --exit-code origin "$branch" > /dev/null 2>&1; then
-              echo "skip: $branch already exists"
+            if [[ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]]; then
+              echo "skip: open PR already exists for $branch"
               continue
             fi
             if ! (
@@ -41,7 +46,7 @@ jobs:
               chart-vendor
               git add -A
               git commit -m "chore($name): update $current -> $latest"
-              git push origin "$branch"
+              git push --force origin "$branch"
               gh pr create --base main --head "$branch" \
                 --title "chore($name): update to $latest" \
                 --body "Automated upstream update: \`$name\` $current -> $latest.

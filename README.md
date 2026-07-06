@@ -22,6 +22,15 @@ targetRevision: 1.20.0
 Patched charts carry a `+tenx.N` suffix (OCI tag: `1.20.0_tenx.1` — helm and
 ArgoCD translate `+`/`_` automatically).
 
+Artifacts are cosign-signed (keyless) by the publish workflow. To verify:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp 'https://github.com/tenxprotocols/helm-trusted-charts/\.github/workflows/publish\.yaml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/tenxprotocols/helm-trusted-charts/<chart>:<version>
+```
+
 ## Importing a new chart
 
 1. Add an entry to `.charts.yml`:
@@ -69,6 +78,11 @@ one PR per chart with a newer stable upstream version. Patches that no
 longer apply fail that chart's update inside the workflow run — rebase the
 patch files and re-run. Review the source diff and the rendered-manifest
 diff comment, then merge; merging publishes.
+
+The bot needs the `UPDATE_BOT_TOKEN` repo secret (fine-grained PAT,
+Contents: read/write + Pull requests: read/write) — without it, PR
+creation is blocked by the org's Actions settings and bot PRs would not
+trigger CI.
 
 ## CI gates (pr-checks)
 

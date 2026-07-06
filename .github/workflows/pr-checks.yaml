@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  packages: read
 
 jobs:
   vendor-check:
@@ -48,6 +49,10 @@ jobs:
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+      - name: log in to ghcr so the preflight can list tags
+        run: |
+          oras login ghcr.io -u "${{ github.actor }}" --password-stdin \
+            <<< "${{ secrets.GITHUB_TOKEN }}"
       - name: verify changed charts publish to unused versions
         run: |
           for chart in $(scripts/changed-charts.sh "origin/${{ github.base_ref }}"); do

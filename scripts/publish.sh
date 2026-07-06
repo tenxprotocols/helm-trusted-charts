@@ -21,17 +21,34 @@ if [[ -z "$chart" ]]; then
   exit 2
 fi
 
+if [[ ! -d "charts/$chart" ]]; then
+  echo "skip: charts/$chart no longer exists (removed chart)"
+  exit 0
+fi
+
 version=$(compute_publish_version "$chart")
 chart_name=$(yq '.name' "charts/$chart/Chart.yaml")
 tag="${version//+/_}"
 
-if oras repo tags "$REGISTRY_HOST/$chart_name" 2>/dev/null | grep -qx "$tag"; then
+tags_out=$(oras repo tags "$REGISTRY_HOST/$chart_name" 2>&1) || {
+  if grep -qiE 'not found|name unknown|NAME_UNKNOWN' <<< "$tags_out"; then
+    tags_out=""
+  else
+    echo "$tags_out" >&2
+    echo "error: could not list tags for $REGISTRY_HOST/$chart_name — refusing to assume unpublished" >&2
+    exit 1
+  fi
+}
+if grep -qx "$tag" <<< "$tags_out"; then
   if $check_only; then
     echo "error: $chart $version (tag $tag) is already published —" \
       "bump the revision in publish.yml or wait for a new upstream version" >&2
     exit 1
   fi
   echo "skip: $chart $version already published"
+  if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    echo "::warning::$chart $version already published — skipped (expected only on force-push recovery)"
+  fi
   exit 0
 fi
 
