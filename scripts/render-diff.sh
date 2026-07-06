@@ -32,7 +32,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-git worktree add --detach "$tmp/base" "$base" >/dev/null 2>&1
+git worktree add --detach "$tmp/base" "$base" >/dev/null 2>&1 \
+  || { echo "error: could not create worktree for base ref '$base'" >&2; exit 1; }
 
 render "charts/$chart" "ci/$chart" "$tmp/head.yaml"
 render "$tmp/base/charts/$chart" "$tmp/base/ci/$chart" "$tmp/base.yaml"
