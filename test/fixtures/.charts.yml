@@ -1,0 +1,5 @@
+charts:
+  - name: demo-chart
+    version: 0.1.0
+    repository:
+      url: http://127.0.0.1:8123
