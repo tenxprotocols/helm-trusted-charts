@@ -22,9 +22,10 @@ if [[ -z "$chart" ]]; then
 fi
 
 version=$(compute_publish_version "$chart")
+chart_name=$(yq '.name' "charts/$chart/Chart.yaml")
 tag="${version//+/_}"
 
-if oras repo tags "$REGISTRY_HOST/$chart" 2>/dev/null | grep -qx "$tag"; then
+if oras repo tags "$REGISTRY_HOST/$chart_name" 2>/dev/null | grep -qx "$tag"; then
   if $check_only; then
     echo "error: $chart $version (tag $tag) is already published —" \
       "bump the revision in publish.yml or wait for a new upstream version" >&2
@@ -43,12 +44,13 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 helm package "charts/$chart" --version "$version" -d "$tmp" > /dev/null
-push_out=$(helm push "$tmp/$chart-$version.tgz" "oci://$REGISTRY_HOST" 2>&1)
+push_out=$(helm push "$tmp/${chart_name}-${version}.tgz" "oci://$REGISTRY_HOST" 2>&1) \
+  || { echo "$push_out" >&2; echo "error: helm push failed for $chart $version" >&2; exit 1; }
 echo "$push_out"
 
 if [[ "${CI:-}" == "true" ]]; then
   digest=$(grep -o 'sha256:[0-9a-f]*' <<< "$push_out" | head -1)
-  cosign sign --yes "$REGISTRY_HOST/$chart@$digest"
+  cosign sign --yes "$REGISTRY_HOST/$chart_name@$digest"
 fi
 
 echo "published: $chart $version"
